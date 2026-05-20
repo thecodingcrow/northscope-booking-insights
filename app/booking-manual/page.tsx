@@ -135,9 +135,9 @@ function RuleCard({ rule }: { rule: Rule }) {
                 <Link
                   key={docId}
                   href={`/documents/${docId}`}
-                  className="inline-flex items-center gap-1 rounded-md bg-red-50 border border-red-200 px-2 py-1 font-mono text-[11px] text-red-700 hover:bg-red-100 hover:text-red-900 hover:border-red-300 transition-colors"
+                  className="inline-flex items-center gap-1 rounded-md bg-rose-50 border border-rose-200 px-2 py-1 font-mono text-[11px] text-rose-700 hover:bg-rose-100 hover:text-rose-900 hover:border-rose-300 transition-colors"
                 >
-                  <AlertTriangle className="h-2.5 w-2.5 text-red-500" />
+                  <AlertTriangle className="h-2.5 w-2.5 text-rose-500" />
                   {docId}
                 </Link>
               ))}
@@ -204,7 +204,7 @@ export default function BookingManualPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
                   Total violations
                 </p>
-                <p className="mt-2 text-2xl font-semibold text-red-600">
+                <p className="mt-2 text-2xl font-semibold text-rose-600">
                   {violationCount}
                 </p>
                 <p className="mt-1.5 text-[11px] text-stone-400">
