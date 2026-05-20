@@ -8,9 +8,9 @@ Booking Insights is a Next.js 16 web application that ingests a single period of
 
 ## Live demo
 
-**URL:** `https://<your-deploy>.vercel.app` *(update after linking Vercel — see Deploy to Vercel below)*
+**URL:** <https://northscope-booking-insights.vercel.app>
 
-> Screenshot to be added after Vercel deploy. Run `pnpm dev` and open `http://localhost:3000` to see the Dashboard locally.
+The app is live on Vercel. All 6 routes (`/`, `/documents`, `/documents/[id]`, `/anomalies/text`, `/anomalies/duplicates`, `/booking-manual`) load with the generated dataset committed to the repo. Run `pnpm dev` and open `http://localhost:3000` for the same thing locally.
 
 ---
 
