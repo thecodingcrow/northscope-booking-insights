@@ -8,8 +8,6 @@ import {
   Repeat2,
   Copy,
   BookOpen,
-  Users,
-  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,8 +49,6 @@ const NAV_SECTIONS: NavSection[] = [
     title: "Library",
     items: [
       { label: "Booking manual", href: "/booking-manual", icon: BookOpen },
-      { label: "Vendors", href: "/vendors", icon: Users },
-      { label: "Chart of accounts", href: "/accounts", icon: BarChart3 },
     ],
   },
 ];
