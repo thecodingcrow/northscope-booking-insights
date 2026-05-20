@@ -90,8 +90,9 @@ function SidebarNavItem({ item }: { item: NavItem }) {
 export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-stone-200 bg-white">
-      {/* Logo / brand */}
-      <div className="flex h-14 items-center gap-2 border-b border-stone-200 px-4">
+      {/* Logo / brand — height matches page-header (kicker + h1 + py-4) so the
+          bottom border aligns across the whole top row. */}
+      <div className="flex h-[82px] items-center gap-2 border-b border-stone-200 px-4">
         {/* Gradient brand mark */}
         <div className="flex h-6 w-6 items-center justify-center rounded bg-gradient-to-br from-indigo-500 to-violet-600">
           <span className="text-[10px] font-bold text-white">N</span>
