@@ -317,8 +317,14 @@ function makeMarketing(params: {
 // Booking texts
 // ---------------------------------------------------------------------------
 
+// A1-anchor: index[0] and index[1] both carry "Cloud hosting Apr" so that
+//   when A1 mutates index[0] to "Clud hosting Apr", index[1] remains as the
+//   clean anchor for the text-similarity heuristic to cluster against.
+// A3-anchor: index[2] and index[3] both carry "AWS Hosting März" so that
+//   when A3 mutates index[2] to "AWS Hostng März", index[3] remains as the
+//   clean anchor ("AWS Hosting Apr" removed — unique texts are not required here).
 const v042Texts = [
-  "Cloud hosting Apr", "Cloud hosting März", "AWS Hosting März", "AWS Hosting Apr",
+  "Cloud hosting Apr", "Cloud hosting Apr", "AWS Hosting März", "AWS Hosting März",
   "V&C Cloud Abonnement März", "V&C Cloud Abonnement Apr", "Cloudinfrastruktur März",
   "Cloudinfrastruktur Apr", "Server-Hosting V&C März", "Server-Hosting V&C Apr",
   "CDN-Dienste V&C März", "CDN-Dienste V&C Apr", "Datenspeicher Cloud März",
@@ -348,9 +354,12 @@ const microsoftTexts = [
   "Teams-Lizenz Apr",
 ];
 
+// A5-anchor: index[3] carries "Lufthansa Flug Berlin" (same as index[0]) so that
+//   when A5 mutates index[0] to "Lufhansa Flug Berlin", index[3] remains as the
+//   clean anchor for the text-similarity heuristic to cluster against.
 const lufthansaTexts = [
   "Lufthansa Flug Berlin", "Lufthansa Flug München", "Lufthansa Flug Hamburg",
-  "Lufthansa Flug Frankfurt", "Lufthansa Flug Wien",
+  "Lufthansa Flug Berlin", "Lufthansa Flug Wien",
 ];
 
 const customerNames = [

@@ -250,7 +250,7 @@
     "amount_cents": 67625,
     "currency": "EUR",
     "debit_credit": "D",
-    "booking_text": "Cloud hosting März",
+    "booking_text": "Cloud hosting Apr",
     "vendor_id": "V-042",
     "customer_id": null,
     "tax_code": "V19"
@@ -266,7 +266,7 @@
     "amount_cents": 12849,
     "currency": "EUR",
     "debit_credit": "D",
-    "booking_text": "Cloud hosting März",
+    "booking_text": "Cloud hosting Apr",
     "vendor_id": "V-042",
     "customer_id": null,
     "tax_code": "V19"
@@ -282,7 +282,7 @@
     "amount_cents": -80474,
     "currency": "EUR",
     "debit_credit": "C",
-    "booking_text": "Cloud hosting März",
+    "booking_text": "Cloud hosting Apr",
     "vendor_id": "V-042",
     "customer_id": null,
     "tax_code": null
@@ -346,7 +346,7 @@
     "amount_cents": 94511,
     "currency": "EUR",
     "debit_credit": "D",
-    "booking_text": "AWS Hosting Apr",
+    "booking_text": "AWS Hosting März",
     "vendor_id": "V-042",
     "customer_id": null,
     "tax_code": "V19"
@@ -362,7 +362,7 @@
     "amount_cents": 17957,
     "currency": "EUR",
     "debit_credit": "D",
-    "booking_text": "AWS Hosting Apr",
+    "booking_text": "AWS Hosting März",
     "vendor_id": "V-042",
     "customer_id": null,
     "tax_code": "V19"
@@ -378,7 +378,7 @@
     "amount_cents": -112468,
     "currency": "EUR",
     "debit_credit": "C",
-    "booking_text": "AWS Hosting Apr",
+    "booking_text": "AWS Hosting März",
     "vendor_id": "V-042",
     "customer_id": null,
     "tax_code": null
@@ -3978,7 +3978,7 @@
     "amount_cents": 43784,
     "currency": "EUR",
     "debit_credit": "D",
-    "booking_text": "Lufthansa Flug Frankfurt",
+    "booking_text": "Lufthansa Flug Berlin",
     "vendor_id": "V-018",
     "customer_id": null,
     "tax_code": null
@@ -3994,7 +3994,7 @@
     "amount_cents": -43784,
     "currency": "EUR",
     "debit_credit": "C",
-    "booking_text": "Lufthansa Flug Frankfurt",
+    "booking_text": "Lufthansa Flug Berlin",
     "vendor_id": "V-018",
     "customer_id": null,
     "tax_code": null
