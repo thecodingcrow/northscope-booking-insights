@@ -233,6 +233,21 @@ The same normalization function (umlaut-fold → lowercase → collapse whitespa
 
 ---
 
+## Assumptions
+
+The brief explicitly asks for documented assumptions about account logic and scope. These governed every decision in the data generator and heuristics.
+
+- **Chart of accounts**: subset of SKR04 (~30 accounts). Revenue 4xxx, expenses 6xxx, AP collective 1600, AR collective 1400, bank 1800, VAT input/output 1576/3806. No asset accounts, no intercompany, no inventory.
+- **Currency**: single EUR throughout. The `currency` field exists in the schema; multi-currency is an additive change (see Engineering judgment above).
+- **Entity**: single `company_code = "1000"`. No intercompany flows modeled.
+- **Time window**: 1 March 2026 – 30 April 2026 (2 closed calendar months, ~61 days).
+- **Money representation**: signed integer cents end-to-end — `250000` = EUR 2,500.00 (see [ADR-0001](docs/adr/0001-money-as-integer-cents.md)). Display layer is the sole formatter.
+- **Storno convention**: B4's reversal uses transit account 1900 (not a strict SAP-conformant reversal pair). This kept the dataset balanced and avoided collateral C4 rule violations that a standard reversal would have triggered.
+- **Recurring patterns**: rent fires on day 1 of each month; payroll and depreciation fire on month-end. These regularity assumptions drive the recurring-pattern suppression in Feature 2.
+- **itServicesV042**: the "Vendor V-042" relationship is the strongest planted rule pattern (~18 Documents, all on G/L 6815 + tax V19 + cost_center IT) to give the Booking Manual a clear discovery target with high support and 1.00 confidence before violations are planted.
+
+---
+
 ## Research (Task 3)
 
 <!-- Filled in Issue 11 -->
