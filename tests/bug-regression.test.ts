@@ -141,3 +141,56 @@ describe("Bug 3 — month-name recurring variant exemption", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Raw-identical text exclusion: belongs to F2, not F1
+// ---------------------------------------------------------------------------
+
+describe("Raw-identical text exclusion — F2 territory, not F1", () => {
+  const clusters = findTextSimilarities(lines);
+
+  it("B1 planted duplicate (same raw text on two docs) does NOT appear in any F1 cluster", () => {
+    // B1: docs 1900000173 and 1900009000 both have booking_text "Druckerpatronen Bürowelt".
+    // Raw texts are identical (same string after trim) → this is a duplicate-document
+    // signal handled by F2. F1 must not cluster them.
+    const sharedCluster = clusters.find(
+      (c) =>
+        c.members.some((m) => m.document_id === "1900000173") &&
+        c.members.some((m) => m.document_id === "1900009000")
+    );
+    expect(sharedCluster, "B1 raw-identical pair must not appear in F1 output").toBeUndefined();
+  });
+
+  it("B2 planted duplicate (CDN-Dienste V&C März, same raw text) does NOT appear in any F1 cluster", () => {
+    // B2: docs 1900000116 and 1900009001 share identical raw booking_text.
+    // F1 must exclude this pair.
+    const sharedCluster = clusters.find(
+      (c) =>
+        c.members.some((m) => m.document_id === "1900000116") &&
+        c.members.some((m) => m.document_id === "1900009001")
+    );
+    expect(sharedCluster, "B2 raw-identical pair must not appear in F1 output").toBeUndefined();
+  });
+
+  it("A4 digit-only diff pair (RECHNUNG 4471 / Rechnung 4571) is still in F1 (raws differ)", () => {
+    // A4: raw texts are "RECHNUNG 4471" and "Rechnung 4571" — different after trim.
+    // These pass the raw-identical filter and must still appear in F1.
+    const cluster = clusters.find(
+      (c) =>
+        c.members.some((m) => m.document_id === "1900000168") &&
+        c.members.some((m) => m.document_id === "1900000174")
+    );
+    expect(cluster, "A4 pair must remain in F1 output (raws differ)").toBeDefined();
+    expect(cluster!.severity).toBe("medium");
+  });
+
+  it("A2 umlaut/whitespace variants still appear in F1 (raw texts differ, not raw-identical)", () => {
+    // A2: "Büromaterial Staples", "Bueromaterial Staples", "Büromaterial  Staples"
+    // These have different raw texts → they pass the raw-identical filter → F1 clusters them.
+    const cluster = clusters.find((c) =>
+      c.members.some((m) => m.document_id === "1900000124")
+    );
+    expect(cluster, "A2 umlaut/whitespace cluster must remain in F1").toBeDefined();
+    expect(cluster!.severity).toBe("low");
+  });
+});
