@@ -106,15 +106,30 @@ describe("findTextSimilarities", () => {
     expect(a3Cluster!.severity).toBe("high");
   });
 
+  it("A4: RECHNUNG 4471 / Rechnung 4571 digit-only diff is classified medium (not high)", () => {
+    // A4: "RECHNUNG 4471" normalizes to "rechnung 4471"; "Rechnung 4571" normalizes
+    // to "rechnung 4571". The single differing character is a digit substitution
+    // (4 → 5), which is ambiguous between two different invoices and a fat-finger
+    // typo. Per the severity table, digit-only diffs rank medium.
+    const a4Cluster = clusters.find((c) =>
+      c.members.some((m) => m.document_id === "1900000168")
+    );
+    expect(a4Cluster).toBeDefined();
+    expect(a4Cluster!.severity).toBe("medium");
+    // Both docs must be present
+    const docIds = a4Cluster!.members.map((m) => m.document_id);
+    expect(docIds).toContain("1900000168");
+    expect(docIds).toContain("1900000174");
+  });
+
   it("A5: cluster found for Lufhansa Flug Berlin typo", () => {
     const a5Cluster = clusters.find((c) =>
       c.members.some((m) => m.document_id === "1900000188")
     );
     expect(a5Cluster).toBeDefined();
-    // Both 1900000188 and 1900000191 are V-018 (same vendor, dist=1).
-    // The spec severity rules yield "high" here; the catalog marks it "medium".
-    // The task acceptance test only requires the doc IDs appear in output — not severity.
-    expect(["high", "medium"]).toContain(a5Cluster!.severity);
+    // Both 1900000188 and 1900000191 are V-018 (same vendor, dist=1, letter diff).
+    // Letter-typo on same vendor → high per the refined severity table.
+    expect(a5Cluster!.severity).toBe("high");
   });
 
   it("cluster members include vendor_id and raw_text", () => {
