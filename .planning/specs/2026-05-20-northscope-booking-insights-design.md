@@ -114,7 +114,7 @@ The generator is a list of typed template functions. Each takes parameters and r
 | 7 | `payroll` *(monthly recurring)* | 2 | Dr 6020 / Cr bank · fires last day of month |
 | 8 | `depreciation` *(monthly recurring)* | 2 | Dr 6520 / Cr 0710 · fires last day of month |
 | 9 | `itServicesV042` *(frequent)* | 3 | Dr 6815 + Dr 1576 / Cr 1600 · cost_center=IT · tax=V19 · ~18 instances |
-| 10 | `officeSupplies` *(varied vendor)* | 3 | Dr 6815 + Dr 1576 / Cr 1600 · cost_center varies |
+| 10 | `officeSupplies` *(varied vendor)* | 3 | Dr **6400** (Bürobedarf) + Dr 1576 / Cr 1600 · cost_center varies · [implementation uses 6400 not 6815 — preserves 6815 as V-042's distinctive signal for rule mining] |
 
 ### Generator architecture (clean-then-corrupt)
 
