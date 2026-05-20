@@ -250,7 +250,21 @@ The brief explicitly asks for documented assumptions about account logic and sco
 
 ## Research (Task 3)
 
-<!-- Filled in Issue 11 -->
+*Context Engineering / Knowledge Graph — how to make "why was this discount granted?" answerable*
+
+- **Context sources to connect**: SOP markdown checked into the repo or a Confluence space (versioned, diff-able); CRM opportunity/deal notes via Salesforce or HubSpot API (discount approval events live here); AP/AR email threads via Gmail or Outlook API with a narrow label filter; the chart-of-accounts data dictionary as a YAML file in the repo (account → description → owner → valid cost-center mappings); and the existing anomaly catalog itself, which is already a typed corpus of known-bad patterns.
+
+- **Entities and relations needed**: `KPI` –[*defined_by*]→ `Definition`; `Definition` –[*owned_by*]→ `Owner`; `Definition` –[*computed_by*]→ `Query/Transformation`; `Query/Transformation` –[*approved_by*]→ `Approval`; `Approval` –[*references*]→ `SourceDocument` (SOP, email, change request); `SourceDocument` –[*governs*]→ `Rule`; `Rule` –[*violated_by*]→ `Document`. The minimum viable graph has these 7 node types and 6 typed edges — enough to answer both "who owns this KPI" and "what change request last touched this rule."
+
+- **Retrieval — vector layer**: embed every SourceDocument chunk (SOP paragraphs, email bodies, CoA descriptions) with a dense model. On query ("why was this discount granted?"), embed the query and ANN-search across all chunks to shortlist semantically relevant paragraphs. Vectors give fuzzy semantic recall; without them, keyword search misses synonyms and paraphrases.
+
+- **Retrieval — graph layer**: from the shortlisted chunks, traverse the typed graph to pull structured context: who owns the matched Rule, what Approval record last changed it, which Documents violated it. Vectors can't do typed traversal — "give me all Documents that violated a Rule owned by the Finance team and approved after 2025-01-01" is a graph query, not a similarity search. Both layers are required because neither is sufficient alone.
+
+- **Evidence-first answers**: every generated answer must cite the specific SourceDocument IDs and graph paths it drew from. Refuse to answer without retrieved support — a hallucinated KPI definition is worse than no answer. This submission already demonstrates the principle one layer down: every finding ties back to specific Document IDs from the anomaly catalog, so a reviewer can trace any flag to its source. The same discipline applied one layer up means context-engineered answers cite their source SOP section, change-request ID, or email thread — not just "the policy says so."
+
+- **Risk 1 — Stale context vs. source-of-truth drift**: a SOP is updated in Confluence but the embedded chunk is 3 months old; the system confidently answers from outdated text. Mitigation: freshness SLOs per source type (e.g. SOPs re-indexed within 24h of a Confluence edit event via webhook; CoA YAML re-indexed on each repo merge to main).
+
+- **Risk 2 — Hallucinated KPI definitions**: the LLM interpolates a plausible-sounding definition that no source document actually contains, because the retrieval step returned only partial context. Mitigation: require evidence-anchored answers — if the retriever returns fewer than N chunks above a confidence threshold, return "I don't have enough source material to answer this confidently" rather than generating from priors. This is the same discipline as ADR-0002: prefer an explicit "no finding" over a false positive.
 
 ---
 
