@@ -1,26 +1,27 @@
 @import "tailwindcss";
 
+/*
+ * Northscope Booking Insights — Global styles
+ * Locked palette: stone-50 body / white sidebar / stone-200 borders / rose|amber|slate severity / indigo→violet brand
+ * See docs/prototype-notes/0001-dashboard-direction.md
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand */
+  --brand-from: theme(colors.indigo.500);
+  --brand-to: theme(colors.violet.600);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Reset body to locked palette — no dark mode in this app */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: theme(colors.stone.50);
+  color: theme(colors.stone.900);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
