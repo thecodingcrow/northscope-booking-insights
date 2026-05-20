@@ -67,6 +67,57 @@ export function normalizeText(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Month-name exemption (recurring period variants)
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalized German month name tokens (after umlaut folding + lowercase).
+ * Pairs like "maerz" vs "apr" differ only in month name → recurring variant,
+ * NOT a typo.
+ */
+const MONTH_TOKENS = new Set([
+  "jan", "januar",
+  "feb", "februar",
+  "mar", "maerz",
+  "apr", "april",
+  "mai",
+  "jun", "juni",
+  "jul", "juli",
+  "aug", "august",
+  "sep", "september",
+  "okt", "oktober",
+  "nov", "november",
+  "dez", "dezember",
+]);
+
+/**
+ * Returns true if the only difference between two normalized texts is a single
+ * substituted German month-name token — i.e., this pair is a recurring period
+ * variant and should NOT be flagged as a typo cluster.
+ *
+ * Algorithm: tokenize both texts; find positions where tokens differ; require
+ * that there is exactly one differing position and both differing tokens are
+ * month names.
+ */
+function isMonthNameSubstitution(normA: string, normB: string): boolean {
+  const tokA = normA.split(" ");
+  const tokB = normB.split(" ");
+
+  // Token counts must match for a single-token substitution
+  if (tokA.length !== tokB.length) return false;
+
+  const diffIndices: number[] = [];
+  for (let i = 0; i < tokA.length; i++) {
+    if (tokA[i] !== tokB[i]) diffIndices.push(i);
+  }
+
+  if (diffIndices.length !== 1) return false;
+
+  const idx = diffIndices[0];
+  return MONTH_TOKENS.has(tokA[idx]) && MONTH_TOKENS.has(tokB[idx]);
+}
+
+// ---------------------------------------------------------------------------
 // Step 2: De-dupe by (document_id, normalized_text) representative
 // ---------------------------------------------------------------------------
 
@@ -184,6 +235,11 @@ export function findTextSimilarities(lines: JournalLine[]): TextSimilarityCluste
       const similarity = 1 - dist / maxLen;
 
       if (similarity >= SIMILARITY_THRESHOLD && dist <= DISTANCE_THRESHOLD) {
+        // Month-name substitution exemption: if the only textual difference is
+        // a German month token (e.g. "maerz" → "apr"), this is a recurring
+        // period variant — not a typo. Do not cluster these pairs.
+        if (isMonthNameSubstitution(a.normalized_text, b.normalized_text)) continue;
+
         uf.union(a.document_id, b.document_id);
         const pairKey = [a.document_id, b.document_id].sort().join("\0");
         pairDistances.set(pairKey, dist);

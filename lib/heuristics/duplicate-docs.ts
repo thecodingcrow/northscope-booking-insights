@@ -8,8 +8,12 @@
  *   2. Score each candidate pair (A, B) with weighted composite
  *   3. Apply recurring-pattern filter (B5 — monthly rent)
  *   4. Apply storno filter (B4 — reversal-and-resplit)
- *   5. Cluster surviving pairs via union-find
- *   6. Return sorted clusters
+ *   5. Emit each suspicious PAIR directly (no transitive union-find clustering)
+ *   6. Return sorted pairs
+ *
+ * Each output item represents exactly ONE pair of documents. No transitive
+ * merging — a same-vendor same-account-pair coincidence cannot drag unrelated
+ * invoices into the same cluster.
  */
 
 import { distance } from "fastest-levenshtein";
@@ -361,36 +365,18 @@ function buildStornoExclusionSet(
 }
 
 // ---------------------------------------------------------------------------
-// Union-Find
-// ---------------------------------------------------------------------------
-
-class UnionFind {
-  private parent: Map<string, string> = new Map();
-
-  find(x: string): string {
-    if (!this.parent.has(x)) this.parent.set(x, x);
-    const p = this.parent.get(x)!;
-    if (p !== x) {
-      this.parent.set(x, this.find(p));
-    }
-    return this.parent.get(x)!;
-  }
-
-  union(x: string, y: string): void {
-    const px = this.find(x);
-    const py = this.find(y);
-    if (px !== py) this.parent.set(px, py);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
 /**
- * Find duplicate document clusters in the given documents/lines.
+ * Find duplicate document pairs in the given documents/lines.
  *
  * Pure function — no side effects, stable output.
+ *
+ * Returns one DuplicatePairCluster per suspicious PAIR (exactly 2 members).
+ * No transitive union-find clustering: each pair is evaluated independently,
+ * so a same-vendor/same-account coincidence cannot chain unrelated documents
+ * into a mega-cluster.
  */
 export function findDuplicateDocuments(
   documents: DocumentView[],
@@ -423,101 +409,57 @@ export function findDuplicateDocuments(
 
   const THRESHOLD = 0.75;
 
-  // Pairwise scoring
-  type ScoredPair = {
-    a: DocFeatureVec;
-    b: DocFeatureVec;
-    score: number;
-    breakdown: ScoreBreakdown;
-  };
-  const scoredPairs: ScoredPair[] = [];
+  const docById = new Map(documents.map((d) => [d.document_id, d]));
+
+  const pairs: DuplicatePairCluster[] = [];
 
   for (let i = 0; i < activeVecs.length; i++) {
     for (let j = i + 1; j < activeVecs.length; j++) {
-      // Ensure a.posting_date <= b.posting_date
+      // Ensure a.posting_date <= b.posting_date for deterministic ordering
       const [a, b] =
         activeVecs[i].posting_date <= activeVecs[j].posting_date
           ? [activeVecs[i], activeVecs[j]]
           : [activeVecs[j], activeVecs[i]];
 
       const { score, breakdown } = computeCompositeScore(a, b);
-      if (score >= THRESHOLD) {
-        scoredPairs.push({ a, b, score, breakdown });
-      }
+      if (score < THRESHOLD) continue;
+
+      const toMember = (vec: DocFeatureVec): ClusterMember => {
+        const doc = docById.get(vec.doc_id);
+        return {
+          doc_id: vec.doc_id,
+          posting_date: doc?.posting_date ?? vec.posting_date.toISOString().slice(0, 10),
+          amount_cents: vec.document_amount_cents,
+          vendor_id: vec.vendor_id,
+          customer_id: vec.customer_id,
+          primary_account_pair: vec.primary_account_pair,
+          normalized_text: vec.normalized_text,
+        };
+      };
+
+      pairs.push({
+        // Placeholder ID; assigned after sort
+        id: "",
+        confidence: Math.round(score * 1000) / 1000,
+        // Exactly 2 members — the pair itself, earliest first
+        members: [toMember(a), toMember(b)],
+        // Score breakdown computed between THESE two documents specifically
+        score_breakdown: breakdown,
+      });
     }
   }
 
-  // Union-find clustering
-  const uf = new UnionFind();
-  for (const { a, b } of scoredPairs) {
-    uf.union(a.doc_id, b.doc_id);
-  }
-
-  // Build clusters: group doc_ids by root
-  const clusterMap = new Map<string, string[]>();
-  const allInvolvedIds = new Set(scoredPairs.flatMap(({ a, b }) => [a.doc_id, b.doc_id]));
-  for (const id of allInvolvedIds) {
-    const root = uf.find(id);
-    const bucket = clusterMap.get(root);
-    if (bucket) bucket.push(id);
-    else clusterMap.set(root, [id]);
-  }
-
-  // Build output clusters
-  const vecById = new Map(vecs.map((v) => [v.doc_id, v]));
-  const docById = new Map(documents.map((d) => [d.document_id, d]));
-
-  const clusters: DuplicatePairCluster[] = [];
-  let clusterIndex = 1;
-
-  for (const [, memberIds] of clusterMap) {
-    // For confidence: use the max score among pairs in this cluster
-    const pairsInCluster = scoredPairs.filter(
-      ({ a, b }) => memberIds.includes(a.doc_id) && memberIds.includes(b.doc_id)
-    );
-    if (pairsInCluster.length === 0) continue;
-
-    const bestPair = pairsInCluster.reduce((best, p) =>
-      p.score > best.score ? p : best
-    );
-
-    const members: ClusterMember[] = memberIds.map((id) => {
-      const vec = vecById.get(id)!;
-      const doc = docById.get(id);
-      return {
-        doc_id: id,
-        posting_date: doc?.posting_date ?? vec.posting_date.toISOString().slice(0, 10),
-        amount_cents: vec.document_amount_cents,
-        vendor_id: vec.vendor_id,
-        customer_id: vec.customer_id,
-        primary_account_pair: vec.primary_account_pair,
-        normalized_text: vec.normalized_text,
-      };
-    });
-
-    // Sort members by posting_date ascending
-    members.sort((a, b) => a.posting_date.localeCompare(b.posting_date));
-
-    clusters.push({
-      id: `D-${String(clusterIndex).padStart(3, "0")}`,
-      confidence: Math.round(bestPair.score * 1000) / 1000,
-      members,
-      score_breakdown: bestPair.breakdown,
-    });
-    clusterIndex++;
-  }
-
   // Sort by confidence descending, then by first member doc_id for stability
-  clusters.sort((a, b) => {
-    const diff = b.confidence - a.confidence;
+  pairs.sort((x, y) => {
+    const diff = y.confidence - x.confidence;
     if (diff !== 0) return diff;
-    return a.members[0].doc_id.localeCompare(b.members[0].doc_id);
+    return x.members[0].doc_id.localeCompare(y.members[0].doc_id);
   });
 
-  // Re-assign IDs after sort
-  clusters.forEach((c, i) => {
-    c.id = `D-${String(i + 1).padStart(3, "0")}`;
+  // Assign stable sequential IDs after sort
+  pairs.forEach((p, i) => {
+    p.id = `D-${String(i + 1).padStart(3, "0")}`;
   });
 
-  return clusters;
+  return pairs;
 }
