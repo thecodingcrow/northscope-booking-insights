@@ -180,6 +180,26 @@ class UnionFind {
 }
 
 // ---------------------------------------------------------------------------
+// Step 1.5: Raw-identical text exclusion (F2 territory)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if two raw booking texts are identical after trimming whitespace.
+ *
+ * When two different documents carry exactly the same raw text, this is a
+ * duplicate-document signal (Feature 2 / F2), NOT a text-similarity typo
+ * cluster (Feature 1 / F1). Pairing these in F1 would double-count the signal
+ * and assign a misleading severity.
+ *
+ * Note: umlaut/casing/whitespace variants do NOT trigger this check because
+ * their raw texts differ (e.g. "Büromaterial Staples" vs "Bueromaterial Staples").
+ * Only truly identical raws (after trim) are excluded here.
+ */
+function isRawIdentical(rawA: string, rawB: string): boolean {
+  return rawA.trim() === rawB.trim();
+}
+
+// ---------------------------------------------------------------------------
 // Step 6: Severity ranking helpers
 // ---------------------------------------------------------------------------
 
@@ -197,6 +217,46 @@ function isWhitespaceCasingVariant(reps: Representative[]): boolean {
   const normalized = reps.map((r) => r.normalized_text);
   const first = normalized[0];
   return normalized.every((n) => n === first);
+}
+
+/**
+ * Returns true if the characters that differ between two normalized strings
+ * are all digits (i.e., the diff is entirely within a digit run).
+ *
+ * Algorithm: walk both strings character by character; collect positions where
+ * they differ; check that every differing character is a digit in BOTH strings.
+ * This catches the "RECHNUNG 4471 vs Rechnung 4571" case: the only change is
+ * one digit substitution, which is ambiguous between a fat-finger typo and two
+ * legitimately different invoices.
+ *
+ * Only meaningful when the strings have the same length (i.e., pure substitution,
+ * not insert/delete). For insert/delete diffs we fall through to letter-typo logic.
+ */
+function isDiffOnlyDigits(normA: string, normB: string): boolean {
+  if (normA.length !== normB.length) return false;
+  let hasDiff = false;
+  for (let i = 0; i < normA.length; i++) {
+    if (normA[i] !== normB[i]) {
+      hasDiff = true;
+      // Both differing characters must be digits
+      if (!/\d/.test(normA[i]) || !/\d/.test(normB[i])) return false;
+    }
+  }
+  return hasDiff;
+}
+
+/**
+ * Returns true if isDiffOnlyDigits holds for at least one pair in the cluster.
+ */
+function clusterHasDigitOnlyDiff(reps: Representative[]): boolean {
+  for (let i = 0; i < reps.length; i++) {
+    for (let j = i + 1; j < reps.length; j++) {
+      if (isDiffOnlyDigits(reps[i].normalized_text, reps[j].normalized_text)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +295,12 @@ export function findTextSimilarities(lines: JournalLine[]): TextSimilarityCluste
       const similarity = 1 - dist / maxLen;
 
       if (similarity >= SIMILARITY_THRESHOLD && dist <= DISTANCE_THRESHOLD) {
+        // Raw-identical exclusion (Step 1.5): if both raw texts are identical
+        // after trimming, this pair belongs to F2 (duplicate detection), not F1.
+        // Umlaut/casing/whitespace variants pass through here because their raw
+        // texts are NOT equal (e.g. "Büromaterial" vs "Bueromaterial").
+        if (isRawIdentical(a.raw_text, b.raw_text)) continue;
+
         // Month-name substitution exemption: if the only textual difference is
         // a German month token (e.g. "maerz" → "apr"), this is a recurring
         // period variant — not a typo. Do not cluster these pairs.
@@ -300,19 +366,35 @@ export function findTextSimilarities(lines: JournalLine[]): TextSimilarityCluste
     }
 
     // Step 6: Severity
+    // Rules applied in order (see spec §7 severity table):
+    //
+    //   1. dist = 0 normalized → low   (whitespace/casing/umlaut variant, A2-style)
+    //   2. dist ≥ 1, digit-only diff   → medium (ambiguous: different invoices OR fat-finger)
+    //   3. dist 1–2, same vendor, letter diff → high (strong letter-typo signal, A1/A3/A5-style)
+    //   4. dist 1–3, different vendors → medium (possible wrong-vendor selection)
+    //   5. same vendor, dist 3         → medium (edge case)
     const vendorIds = new Set(members.map((m) => m.vendor_id).filter((v): v is string => v !== null));
     const allSameVendor = vendorIds.size === 1 && members.every((m) => m.vendor_id !== null);
     const isWhitespaceCasing = isWhitespaceCasingVariant(members);
+    const hasDigitOnlyDiff = !isWhitespaceCasing && clusterHasDigitOnlyDiff(members);
 
     let severity: "high" | "medium" | "low";
     if (isWhitespaceCasing) {
+      // Rule 1: normalized texts identical → casing/whitespace/umlaut variant
       severity = "low";
+    } else if (hasDigitOnlyDiff) {
+      // Rule 2: single-character difference is entirely within digit runs.
+      // Could be two different invoices (e.g. "Rechnung 4471" vs "Rechnung 4571")
+      // or a fat-finger on a digit. Ambiguous → medium.
+      severity = "medium";
     } else if (allSameVendor && minDist <= 2) {
+      // Rule 3: letter-level typo on same vendor → high (A1/A3/A5 cases)
       severity = "high";
     } else if (!allSameVendor) {
+      // Rule 4: different vendors → medium (possible wrong-vendor selection)
       severity = "medium";
     } else {
-      // Same vendor but distance 3
+      // Rule 5: same vendor, distance 3 → medium
       severity = "medium";
     }
 
@@ -325,9 +407,11 @@ export function findTextSimilarities(lines: JournalLine[]): TextSimilarityCluste
 
     let explanation: string;
     if (isWhitespaceCasing) {
-      explanation = `${members.length} booking texts are whitespace/casing variants of each other.`;
+      explanation = `${members.length} booking texts are whitespace/casing/umlaut variants of each other.`;
+    } else if (hasDigitOnlyDiff && vendorName) {
+      explanation = `${members.length} booking texts within edit-distance ${minDist}, all on vendor ${vendorId} (${vendorName}). Differing characters are digits — could be unrelated invoices or a fat-finger typo.`;
     } else if (allSameVendor && vendorName) {
-      explanation = `${members.length} booking texts within edit-distance ${minDist}, all on vendor ${vendorId} (${vendorName}). Likely typo cluster.`;
+      explanation = `${members.length} booking texts within edit-distance ${minDist}, all on vendor ${vendorId} (${vendorName}). Letter difference suggests a typo of the same event.`;
     } else if (vendorIds.size > 1) {
       explanation = `${members.length} booking texts from different vendors within edit-distance ${minDist}. Possible wrong Vendor selected.`;
     } else {
