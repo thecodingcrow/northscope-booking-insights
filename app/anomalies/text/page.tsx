@@ -23,7 +23,7 @@ export default function TextSimilaritiesPage() {
     <div className="flex flex-col min-h-full">
       {/* Sticky page header */}
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-stone-50/80 backdrop-blur-sm px-8 py-4">
-        <div className="max-w-4xl">
+        <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
             Anomalies
           </p>
@@ -35,7 +35,7 @@ export default function TextSimilaritiesPage() {
 
       {/* Main content */}
       <main className="flex-1 px-8 py-8">
-        <div className="max-w-4xl space-y-6">
+        <div className="space-y-6">
 
           {/* Summary row */}
           <section className="grid grid-cols-3 gap-3 sm:grid-cols-4">

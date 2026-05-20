@@ -112,7 +112,7 @@ export default async function DocumentDetailPage({
     <div className="flex flex-col min-h-full">
       {/* Sticky page header */}
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-stone-50/80 backdrop-blur-sm px-8 py-4">
-        <div className="max-w-4xl">
+        <div>
           <div className="flex items-center gap-2 mb-0.5">
             <Link
               href="/documents"
@@ -130,7 +130,7 @@ export default async function DocumentDetailPage({
 
       {/* Main content */}
       <main className="flex-1 px-8 py-8">
-        <div className="max-w-4xl space-y-6">
+        <div className="space-y-6">
 
           {/* Header card */}
           <div className="rounded-lg border border-stone-200 bg-white p-6">
