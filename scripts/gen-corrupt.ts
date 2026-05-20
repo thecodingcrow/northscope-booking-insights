@@ -224,76 +224,92 @@ function resolveTargets(): CatalogResolution[] {
 // ---------------------------------------------------------------------------
 
 /** B4: storno-and-resplit negative case.
- * Creates a reversal document and two re-split documents.
- * These should NOT be flagged as duplicates because the reversal pattern distinguishes them. */
+ * Creates a correction posting and two re-split documents.
+ * These should NOT be flagged as duplicates because the reversal pattern distinguishes them.
+ *
+ * Implementation: Option B (correction posting via transit account 1900).
+ * Instead of a true SAP storno (which would flip 4xxx revenue to debit side and
+ * create a phantom C4 violation), we post a 2-line clearing entry that parks the
+ * original AR receivable into Verrechnungskonto 1900.  4xxx accounts remain on
+ * the credit side throughout, so no phantom C4 is introduced.
+ *
+ * Posting shape:
+ *   Reversal (clearing):   Dr 1900 (+gross)  / Cr 1400 (-gross)
+ *   Resplit 1 (new inv):   Dr 1400 (+half)   / Cr 4xxx (-halfNet) / Cr 3806 (-halfVat)
+ *   Resplit 2 (new inv):   Dr 1400 (+rest)   / Cr 4xxx (-restNet) / Cr 3806 (-restVat)
+ *
+ * All lines satisfy the invariant: debit_credit=D ↔ amount_cents > 0.
+ */
 function applyB4Storno(sourceDocId: string): string[] {
   const srcLines = lines.filter((l) => l.document_id === sourceDocId);
   if (srcLines.length === 0) return [];
 
   const srcDate = srcLines[0].posting_date;
+  const srcText = srcLines[0].booking_text;
 
-  // Reversal document (all amounts negated, 3 days after original)
-  const reversalId = nextInsertDocId();
-  const reversalDate = offsetDate(srcDate, 3);
-  for (const srcLine of srcLines) {
-    lines.push({
-      ...srcLine,
-      document_id: reversalId,
-      posting_date: reversalDate,
-      amount_cents: -srcLine.amount_cents,
-      debit_credit: srcLine.debit_credit === "D" ? "C" : "D",
-      booking_text: `Storno: ${srcLine.booking_text}`,
-    });
-  }
-
-  // Compute original debit total for the resplit
-  const origDebitTotal = srcLines.reduce((s, l) => s + (l.amount_cents > 0 ? l.amount_cents : 0), 0);
-  const halfAmount = Math.floor(origDebitTotal / 2);
-
-  // Resplit document 1 — 5 days after original
-  const resplit1Id = nextInsertDocId();
-  const resplit1Date = offsetDate(srcDate, 5);
-  const resplit1Net = Math.floor(halfAmount / 1.19); // back-calculate net from gross
-  const resplit1Vat = halfAmount - resplit1Net;
-  // Find the revenue line and AR line from source
-  const revLine = srcLines.find((l) => l.gl_account.startsWith("4") && l.amount_cents < 0);
+  // Locate the key lines from the source customer invoice
   const arLine = srcLines.find((l) => l.gl_account === "1400" && l.amount_cents > 0);
+  const revLine = srcLines.find((l) => l.gl_account.startsWith("4") && l.amount_cents < 0);
   const vatLine = srcLines.find((l) => l.gl_account === "3806" && l.amount_cents < 0);
 
-  if (arLine && revLine && vatLine) {
-    lines.push({
-      ...arLine, document_id: resplit1Id, posting_date: resplit1Date,
-      amount_cents: halfAmount, booking_text: `Umgliederung Teil 1: ${srcLines[0].booking_text}`,
-    });
-    lines.push({
-      ...revLine, document_id: resplit1Id, posting_date: resplit1Date,
-      amount_cents: -resplit1Net, booking_text: `Umgliederung Teil 1: ${srcLines[0].booking_text}`,
-    });
-    lines.push({
-      ...vatLine, document_id: resplit1Id, posting_date: resplit1Date,
-      amount_cents: -resplit1Vat, booking_text: `Umgliederung Teil 1: ${srcLines[0].booking_text}`,
-    });
-
-    // Resplit document 2 — 5 days after original (same day as resplit 1)
-    const resplit2Id = nextInsertDocId();
-    const remainder = origDebitTotal - halfAmount;
-    const resplit2Net = Math.floor(remainder / 1.19);
-    const resplit2Vat = remainder - resplit2Net;
-    lines.push({
-      ...arLine, document_id: resplit2Id, posting_date: resplit1Date,
-      amount_cents: remainder, booking_text: `Umgliederung Teil 2: ${srcLines[0].booking_text}`,
-    });
-    lines.push({
-      ...revLine, document_id: resplit2Id, posting_date: resplit1Date,
-      amount_cents: -resplit2Net, booking_text: `Umgliederung Teil 2: ${srcLines[0].booking_text}`,
-    });
-    lines.push({
-      ...vatLine, document_id: resplit2Id, posting_date: resplit1Date,
-      amount_cents: -resplit2Vat, booking_text: `Umgliederung Teil 2: ${srcLines[0].booking_text}`,
-    });
-    return [sourceDocId, reversalId, resplit1Id, resplit2Id];
+  if (!arLine || !revLine || !vatLine) {
+    console.error(`B4: could not locate AR/revenue/VAT lines in ${sourceDocId}`);
+    return [sourceDocId];
   }
-  return [sourceDocId, reversalId];
+
+  const grossAmount = arLine.amount_cents; // positive (debit)
+
+  // --- Reversal (clearing) document: parks AR into transit account 1900 ---
+  // Dr 1900 Verrechnungskonto (+gross) / Cr 1400 AR (-gross)
+  // No 4xxx account appears → no phantom C4 violation.
+  const reversalId = nextInsertDocId();
+  const reversalDate = offsetDate(srcDate, 3);
+  lines.push({
+    ...arLine,
+    document_id: reversalId, posting_date: reversalDate,
+    gl_account: "1900", debit_credit: "D", amount_cents: grossAmount,
+    booking_text: `Umbuchung Verrechnungskonto: ${srcText}`,
+    template: null,
+  });
+  lines.push({
+    ...arLine,
+    document_id: reversalId, posting_date: reversalDate,
+    gl_account: "1400", debit_credit: "C", amount_cents: -grossAmount,
+    booking_text: `Umbuchung Verrechnungskonto: ${srcText}`,
+    template: null,
+  });
+
+  // --- Resplit documents: two normal customer invoices each at ~half the gross ---
+  const resplitDate = offsetDate(srcDate, 5);
+  const halfGross = Math.floor(grossAmount / 2);
+  const restGross = grossAmount - halfGross;
+
+  function makeResplitDoc(gross: number, label: string): string {
+    const resplitId = nextInsertDocId();
+    const net = Math.floor(gross / 1.19);
+    const vat = gross - net;
+    lines.push({
+      ...arLine!, document_id: resplitId, posting_date: resplitDate,
+      gl_account: "1400", debit_credit: "D", amount_cents: gross,
+      booking_text: `${label}: ${srcText}`, template: "customerInvoice",
+    });
+    lines.push({
+      ...revLine!, document_id: resplitId, posting_date: resplitDate,
+      gl_account: revLine!.gl_account, debit_credit: "C", amount_cents: -net,
+      booking_text: `${label}: ${srcText}`, template: "customerInvoice",
+    });
+    lines.push({
+      ...vatLine!, document_id: resplitId, posting_date: resplitDate,
+      gl_account: "3806", debit_credit: "C", amount_cents: -vat,
+      booking_text: `${label}: ${srcText}`, template: "customerInvoice",
+    });
+    return resplitId;
+  }
+
+  const resplit1Id = makeResplitDoc(halfGross, "Umgliederung Teil 1");
+  const resplit2Id = makeResplitDoc(restGross, "Umgliederung Teil 2");
+
+  return [sourceDocId, reversalId, resplit1Id, resplit2Id];
 }
 
 /** C4: Flip a revenue line (4xxx) to debit side, then compensate on the AR line to keep balance. */

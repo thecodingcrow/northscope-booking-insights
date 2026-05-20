@@ -152,7 +152,7 @@ export const anomalyCatalog: AnomalyEntry[] = [
     expected_doc_ids: ["1900000174","1900000168"],
     expected_severity: "low",
     description:
-      'Bürowelt GmbH vendor invoice: booking text uppercased "RECHNUNG 4471" vs "Rechnung 4471" on another document. Casing variant.',
+      'Bürowelt GmbH vendor invoice: booking text uppercased to "RECHNUNG 4471". After case-fold normalization this clusters with "Rechnung 4571" on another document (vendorInvoiceWithVAT index 6) — edit-distance 1, likely a fat-finger on the digit (4471 vs 4571). The pair is discovered by the case-fold + Levenshtein heuristic, not by exact casing match.',
     mutation: {
       kind: "set-field",
       field: "booking_text",
