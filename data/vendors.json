@@ -1,0 +1,14 @@
+[
+  { "id": "V-001", "name_de": "Immobilien Schreiber GmbH", "default_template_kind": "rent" },
+  { "id": "V-007", "name_de": "Bürowelt GmbH", "default_template_kind": "vendorInvoiceWithVAT" },
+  { "id": "V-012", "name_de": "Staples Deutschland GmbH", "default_template_kind": "officeSupplies" },
+  { "id": "V-018", "name_de": "Lufthansa AG", "default_template_kind": "vendorInvoiceNoVAT" },
+  { "id": "V-023", "name_de": "Deutsche Telekom AG", "default_template_kind": "vendorInvoiceWithVAT" },
+  { "id": "V-031", "name_de": "DATEV eG", "default_template_kind": "vendorInvoiceWithVAT" },
+  { "id": "V-035", "name_de": "Wolff & Partner Rechtsanwälte", "default_template_kind": "vendorInvoiceNoVAT" },
+  { "id": "V-038", "name_de": "Messe München GmbH", "default_template_kind": "vendorInvoiceNoVAT" },
+  { "id": "V-042", "name_de": "V&C Cloud GmbH", "default_template_kind": "itServicesV042" },
+  { "id": "V-055", "name_de": "Amazon Web Services EMEA SARL", "default_template_kind": "itServicesV042" },
+  { "id": "V-061", "name_de": "Microsoft Deutschland GmbH", "default_template_kind": "vendorInvoiceWithVAT" },
+  { "id": "V-074", "name_de": "Lyreco Deutschland GmbH", "default_template_kind": "officeSupplies" }
+]

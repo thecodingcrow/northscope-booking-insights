@@ -1,0 +1,10 @@
+[
+  { "id": "C-001", "name_de": "Müller & Söhne GmbH" },
+  { "id": "C-002", "name_de": "Bayer AG" },
+  { "id": "C-003", "name_de": "Schäfer Logistik KG" },
+  { "id": "C-004", "name_de": "Hoffmann Consulting GmbH" },
+  { "id": "C-005", "name_de": "Braun Industrietechnik GmbH" },
+  { "id": "C-006", "name_de": "Werner & Koch OHG" },
+  { "id": "C-007", "name_de": "Fischer Technologie AG" },
+  { "id": "C-008", "name_de": "Steinberg Handel GmbH" }
+]

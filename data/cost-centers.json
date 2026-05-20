@@ -1,0 +1,7 @@
+[
+  { "id": "ADMIN", "name_de": "Verwaltung" },
+  { "id": "IT", "name_de": "Informationstechnologie" },
+  { "id": "SALES", "name_de": "Vertrieb" },
+  { "id": "MARKETING", "name_de": "Marketing" },
+  { "id": "OPS", "name_de": "Betrieb" }
+]
