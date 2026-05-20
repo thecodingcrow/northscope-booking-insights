@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useTransition } from "react";
+import { useMemo, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   useReactTable,
