@@ -30,14 +30,16 @@ export default function DashboardPage() {
   // Issues 04/05/06 will pass a real number here.
   const findingsValue: string | undefined = undefined;
 
-  // Date range from data
+  // Date range from data — German "MM.YYYY – MM.YYYY"
   const dates = documentViews.map((d) => d.posting_date).sort();
   const dateFrom = dates[0] ?? "";
   const dateTo = dates[dates.length - 1] ?? "";
+  const toMonthYear = (iso: string) => {
+    const [y, m] = iso.split("-");
+    return `${m}.${y}`;
+  };
   const dateRange =
-    dateFrom && dateTo
-      ? `${dateFrom.slice(0, 7)} – ${dateTo.slice(0, 7)}`
-      : "";
+    dateFrom && dateTo ? `${toMonthYear(dateFrom)} – ${toMonthYear(dateTo)}` : "";
 
   return (
     <div className="flex flex-col min-h-full">

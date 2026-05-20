@@ -32,7 +32,7 @@ export function KpiCard({ label, value, sub, accent = false, className }: KpiCar
       <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">{label}</p>
       <p
         className={cn(
-          "mt-2 font-mono text-2xl font-semibold tabular-nums leading-none",
+          "mt-2 text-2xl font-semibold tabular-nums leading-none",
           value === undefined ? "text-stone-300" : "text-stone-900"
         )}
       >
