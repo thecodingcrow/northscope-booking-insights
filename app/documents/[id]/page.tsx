@@ -14,26 +14,71 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { documentViews, lineViews } from "@/lib/data/views";
-import { vendorById, customerById, accountByCode } from "@/lib/data/store";
+import { vendorById, customerById, accountByCode, lines } from "@/lib/data/store";
 import { formatEUR } from "@/lib/format/money";
 import { formatDate } from "@/lib/format/dates";
 import { Badge } from "@/components/ui/badge";
 import type { Finding } from "@/lib/types";
+import { findTextSimilarities } from "@/lib/heuristics/text-similarity";
+import { findDuplicateDocuments } from "@/lib/heuristics/duplicate-docs";
+import { mineRules } from "@/lib/heuristics/rule-mining";
 
 // ---------------------------------------------------------------------------
-// Flags seam — typed placeholder (Issues 04/05/06 will populate)
+// Heuristic results — computed once per server boot (module cache)
 // ---------------------------------------------------------------------------
 
-/**
- * Returns flags for a given document.
- * Phase 3b features replace this with real heuristic results.
- * Signature is intentionally typed to receive document_id so callers
- * can pass it without restructuring the page.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getDocumentFlags(_documentId: string): Finding[] {
-  // Seam: Issues 04, 05, 06 will inject findings here.
-  return [];
+const textClusters = findTextSimilarities(lines);
+const duplicateClusters = findDuplicateDocuments(documentViews, lineViews);
+const rules = mineRules(documentViews, lineViews);
+
+function getDocumentFlags(documentId: string): Finding[] {
+  const flags: Finding[] = [];
+
+  for (const c of textClusters) {
+    if (c.members.some((m) => m.document_id === documentId)) {
+      flags.push({
+        id: c.id,
+        kind: "text-similarity",
+        severity: c.severity,
+        headline: `Near-duplicate booking text (${c.members.length} variants)`,
+        detail: c.explanation,
+        document_ids: c.members.map((m) => m.document_id),
+        confidence: 1 - c.representative_distance / 10,
+      });
+    }
+  }
+
+  for (const c of duplicateClusters) {
+    if (c.members.some((m) => m.doc_id === documentId)) {
+      const sev: Finding["severity"] =
+        c.confidence >= 0.9 ? "high" : c.confidence >= 0.8 ? "medium" : "low";
+      flags.push({
+        id: c.id,
+        kind: "duplicate-document",
+        severity: sev,
+        headline: `Possible duplicate Document (${(c.confidence * 100).toFixed(0)}% confidence)`,
+        detail: `Cluster of ${c.members.length} Documents with matching vendor/amount/text/accounts`,
+        document_ids: c.members.map((m) => m.doc_id),
+        confidence: c.confidence,
+      });
+    }
+  }
+
+  for (const r of rules) {
+    if (r.violations.includes(documentId)) {
+      flags.push({
+        id: r.id,
+        kind: "rule-violation",
+        severity: "medium",
+        headline: `Rule violation: ${r.description}`,
+        detail: `Support ${r.support} · Confidence ${(r.confidence * 100).toFixed(0)}%`,
+        document_ids: [documentId],
+        confidence: r.confidence,
+      });
+    }
+  }
+
+  return flags;
 }
 
 // ---------------------------------------------------------------------------

@@ -8,10 +8,14 @@
  * See docs/prototype-notes/0001-dashboard-direction.md
  */
 
+import Link from "next/link";
 import { lines } from "@/lib/data/store";
-import { documentViews } from "@/lib/data/views";
+import { documentViews, lineViews } from "@/lib/data/views";
 import { formatEUR } from "@/lib/format/money";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { findTextSimilarities } from "@/lib/heuristics/text-similarity";
+import { findDuplicateDocuments } from "@/lib/heuristics/duplicate-docs";
+import { mineRules } from "@/lib/heuristics/rule-mining";
 
 export default function DashboardPage() {
   // ---------------------------------------------------------------------------
@@ -25,10 +29,12 @@ export default function DashboardPage() {
   const debitCents = documentViews.reduce((sum, doc) => sum + doc.debit_cents, 0);
   const debitFormatted = formatEUR(debitCents);
 
-  // Findings count: placeholder until features 04/05/06 land.
-  // Value is undefined so KpiCard renders "—" via the typed seam.
-  // Issues 04/05/06 will pass a real number here.
-  const findingsValue: string | undefined = undefined;
+  // Heuristic findings (memoized at module load via store import caching)
+  const textClusters = findTextSimilarities(lines);
+  const duplicateClusters = findDuplicateDocuments(documentViews, lineViews);
+  const rules = mineRules(documentViews, lineViews);
+  const ruleViolationCount = rules.reduce((sum, r) => sum + r.violations.length, 0);
+  const totalFindings = textClusters.length + duplicateClusters.length + ruleViolationCount;
 
   // Date range from data — German "MM.YYYY – MM.YYYY"
   const dates = documentViews.map((d) => d.posting_date).sort();
@@ -80,24 +86,72 @@ export default function DashboardPage() {
               />
               <KpiCard
                 label="Findings"
-                value={findingsValue}
-                sub="anomalies detected"
+                value={totalFindings.toLocaleString("de-DE")}
+                sub="across 3 features"
               />
             </div>
           </section>
 
-          {/* Placeholder for findings list — populated by issues 04/05/06 */}
+          {/* Findings overview — one entry card per feature, linked to its view */}
           <section>
-            <div className="rounded-lg border border-dashed border-stone-200 bg-white px-8 py-12 text-center">
-              <p className="text-sm font-medium text-stone-500">Findings</p>
-              <p className="mt-1 text-[13px] text-stone-400">
-                Heuristic results will appear here once features are implemented
-                (Issues 04, 05, 06).
-              </p>
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-400 mb-3">
+              By feature
+            </h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FeatureEntry
+                href="/anomalies/text"
+                label="Text similarities"
+                count={textClusters.length}
+                sub="clusters of near-duplicate booking texts"
+              />
+              <FeatureEntry
+                href="/anomalies/duplicates"
+                label="Duplicate documents"
+                count={duplicateClusters.length}
+                sub="candidate pairs after recurring & storno filters"
+              />
+              <FeatureEntry
+                href="/booking-manual"
+                label="Booking manual"
+                count={rules.length}
+                sub={`${ruleViolationCount} rule violation${ruleViolationCount === 1 ? "" : "s"}`}
+              />
             </div>
           </section>
         </div>
       </main>
     </div>
+  );
+}
+
+function FeatureEntry({
+  href,
+  label,
+  count,
+  sub,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  sub: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-lg border border-stone-200 bg-white p-5 hover:border-stone-300 hover:shadow-sm transition-all"
+    >
+      <div className="flex items-baseline justify-between mb-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+          {label}
+        </p>
+        <span className="text-2xl font-semibold tabular-nums text-stone-900">
+          {count.toLocaleString("de-DE")}
+        </span>
+      </div>
+      <p className="text-[13px] text-stone-500">{sub}</p>
+      <p className="mt-3 text-[12px] font-medium text-indigo-600 group-hover:underline">
+        Open →
+      </p>
+    </Link>
   );
 }
