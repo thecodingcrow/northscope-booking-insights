@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Sidebar } from "@/components/nav/sidebar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,7 +28,18 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/*
+       * Shell layout: 240px fixed sidebar (Sidebar component) + scrollable main column.
+       * The sidebar is sticky across all routes — no per-route re-implementation needed.
+       * See docs/prototype-notes/0001-dashboard-direction.md for layout spec.
+       */}
+      <body className="h-full bg-stone-50">
+        <Sidebar />
+        {/* Main column — offset by sidebar width */}
+        <div className="ml-60 min-h-full flex flex-col">
+          {children}
+        </div>
+      </body>
     </html>
   );
 }
