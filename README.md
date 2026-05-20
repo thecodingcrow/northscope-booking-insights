@@ -156,9 +156,27 @@ These items were considered and explicitly cut. The one-line reasoning is the de
 
 ## Self-review
 
-Five concrete findings from reviewing the shipped code across Features 1, 2, and 3:
+During a demo walkthrough after the three feature PRs landed, I identified real correctness issues that took priority over a planned 5-finding follow-up. Those are documented below as follow-up PRs. The original 5 review findings remain as documented trade-offs — they are lower-priority than the bugs that were visible on first run.
 
 ---
+
+### Follow-up PRs shipped
+
+**PR #1 — Heuristic clustering correctness fixes (3 bugs)** · commit `8a14822`
+
+- **Mega-cluster bug**: D-001 was pulling in 19 unrelated V-007 invoices into a single cluster because the recurring-pattern suppression fired on a weak Vendor+Amount match. The fix tightened suppression to require the full account-pair match, not just Vendor+Amount.
+- **Score-breakdown display inconsistency**: the breakdown panel showed `✓ Account pair` for pairs that had actually scored `0` on that component, because the rendering logic was reading a stale pre-filter value. Fixed by threading the live scored component through to the card.
+- **Month-name false-positive typo clusters**: `"März"` and `"Marz"` (common OCR artifact) were clustering as `high` severity even when they came from different Vendors and different G/L Accounts. Added a date-token exclusion pass to the normalization pipeline so month-name variants don't drive severity.
+
+**PR #3 — Text-similarity severity ranking refinements** · commit `67c0cd4`
+
+- Raw-identical texts (distance = 0 after normalization) were being fed through the severity ranker and sometimes surfacing as `high`. Distance-0 pairs are F2 (duplicate detection) territory, not F1. PR #3 excludes them from the text-similarity output entirely.
+- Digit-only diffs (e.g. `"Rechnung 4571"` vs `"RECHNUNG 4471"`) were classified `high` because the same-Vendor check fired. Reclassified to `medium` — a digit transposition is a meaningful difference that warrants manual inspection, not the same urgency as a character-delete typo on a Vendor identifier.
+- A4 was reclassified accordingly from `high` to `low` (case + digit transposition, two different Vendors).
+
+---
+
+### Original 5 findings — documented trade-offs, not actioned this round
 
 **Finding 1 — Storno filter is broader than the spec**
 *Category: Architecture*
@@ -167,7 +185,7 @@ Five concrete findings from reviewing the shipped code across Features 1, 2, and
 
 *Why it matters:* False negatives in a duplicate-detection tool erode trust. A finance reviewer who knows two postings were doubled but doesn't see them flagged will stop trusting the tool.
 
-*Disposition:* `<TBD — user picks>`
+*Disposition:* Documented trade-off — not actioned this round. The demo walkthrough confirmed B4 is correctly excluded and no false negatives appeared in the visible dataset; narrowing the filter requires a labeled negative-case set that doesn't exist yet.
 
 ---
 
@@ -178,7 +196,7 @@ The Anomaly Catalog declares `A5` (`"Lufhansa Flug Berlin"` vs `"Lufthansa Flug 
 
 *Why it matters:* The catalog is the ground truth. If the heuristic is right (and it is here), the catalog should be updated and the test should assert `"high"`, not accept either. Leaving the catalog wrong means the next person reading it sees a wrong severity for A5.
 
-*Disposition:* `<TBD — user picks>`
+*Disposition:* Documented trade-off — not actioned this round. The heuristic behavior is correct; the catalog annotation is stale. PR #3 changed A4's effective severity downstream; aligning A5 is a catalog edit + test assertion tightening with no user-visible impact.
 
 ---
 
@@ -189,7 +207,7 @@ Some routes pass `lines` (the raw `JournalLine[]`) to heuristics; others pass `l
 
 *Why it matters:* When a future heuristic needs a field only present in one shape, the developer must trace every call site to know which shape they're getting. Picking one and enforcing it eliminates that ambiguity at zero runtime cost.
 
-*Disposition:* `<TBD — user picks>`
+*Disposition:* Documented trade-off — not actioned this round. The current heuristics work correctly regardless of which shape they receive; this is a future-maintainer concern, not a present bug.
 
 ---
 
@@ -200,7 +218,7 @@ All three heuristics run at server boot time via module-level imports, then are 
 
 *Why it matters:* Vercel serverless functions can cold-start under load. If heuristic computation takes 200 ms on a real dataset, that's 200 ms of latency on every cold start before the first response. On a warm instance it doesn't matter.
 
-*Disposition:* `<TBD — user picks>`
+*Disposition:* Documented trade-off — not actioned this round. At 150 Documents the computation is sub-millisecond; the risk is real only at real-dataset scale, and optimizing for that scale requires different data architecture (not just `React.cache()`).
 
 ---
 
@@ -211,17 +229,42 @@ The same normalization function (umlaut-fold → lowercase → collapse whitespa
 
 *Why it matters:* Normalization is load-bearing: if Feature 1 normalizes `"Büromaterial"` differently from Feature 2, a text flagged as a typo by Feature 1 will not be recognized as a match by Feature 2's text-similarity component. A single `lib/data/normalize.ts` export eliminates the drift risk.
 
-*Disposition:* `<TBD — user picks>`
+*Disposition:* Documented trade-off — not actioned this round. The two implementations are verified identical and both pass all 72 tests; the risk is divergence in a future edit, which is caught immediately by the golden-master test suite.
 
 ---
 
-After reviewing, the user picks 2 of these 5 findings to action as follow-up PRs. The other 3 remain as documented trade-offs.
+## Assumptions
+
+The brief explicitly asks for documented assumptions about account logic and scope. These governed every decision in the data generator and heuristics.
+
+- **Chart of accounts**: subset of SKR04 (~30 accounts). Revenue 4xxx, expenses 6xxx, AP collective 1600, AR collective 1400, bank 1800, VAT input/output 1576/3806. No asset accounts, no intercompany, no inventory.
+- **Currency**: single EUR throughout. The `currency` field exists in the schema; multi-currency is an additive change (see Engineering judgment above).
+- **Entity**: single `company_code = "1000"`. No intercompany flows modeled.
+- **Time window**: 1 March 2026 – 30 April 2026 (2 closed calendar months, ~61 days).
+- **Money representation**: signed integer cents end-to-end — `250000` = EUR 2,500.00 (see [ADR-0001](docs/adr/0001-money-as-integer-cents.md)). Display layer is the sole formatter.
+- **Storno convention**: B4's reversal uses transit account 1900 (not a strict SAP-conformant reversal pair). This kept the dataset balanced and avoided collateral C4 rule violations that a standard reversal would have triggered.
+- **Recurring patterns**: rent fires on day 1 of each month; payroll and depreciation fire on month-end. These regularity assumptions drive the recurring-pattern suppression in Feature 2.
+- **itServicesV042**: the "Vendor V-042" relationship is the strongest planted rule pattern (~18 Documents, all on G/L 6815 + tax V19 + cost_center IT) to give the Booking Manual a clear discovery target with high support and 1.00 confidence before violations are planted.
 
 ---
 
 ## Research (Task 3)
 
-<!-- Filled in Issue 11 -->
+*Context Engineering / Knowledge Graph — how to make "why was this discount granted?" answerable*
+
+- **Context sources to connect**: SOP markdown checked into the repo or a Confluence space (versioned, diff-able); CRM opportunity/deal notes via Salesforce or HubSpot API (discount approval events live here); AP/AR email threads via Gmail or Outlook API with a narrow label filter; the chart-of-accounts data dictionary as a YAML file in the repo (account → description → owner → valid cost-center mappings); and the existing anomaly catalog itself, which is already a typed corpus of known-bad patterns.
+
+- **Entities and relations needed**: `KPI` –[*defined_by*]→ `Definition`; `Definition` –[*owned_by*]→ `Owner`; `Definition` –[*computed_by*]→ `Query/Transformation`; `Query/Transformation` –[*approved_by*]→ `Approval`; `Approval` –[*references*]→ `SourceDocument` (SOP, email, change request); `SourceDocument` –[*governs*]→ `Rule`; `Rule` –[*violated_by*]→ `Document`. The minimum viable graph has these 7 node types and 6 typed edges — enough to answer both "who owns this KPI" and "what change request last touched this rule."
+
+- **Retrieval — vector layer**: embed every SourceDocument chunk (SOP paragraphs, email bodies, CoA descriptions) with a dense model. On query ("why was this discount granted?"), embed the query and ANN-search across all chunks to shortlist semantically relevant paragraphs. Vectors give fuzzy semantic recall; without them, keyword search misses synonyms and paraphrases.
+
+- **Retrieval — graph layer**: from the shortlisted chunks, traverse the typed graph to pull structured context: who owns the matched Rule, what Approval record last changed it, which Documents violated it. Vectors can't do typed traversal — "give me all Documents that violated a Rule owned by the Finance team and approved after 2025-01-01" is a graph query, not a similarity search. Both layers are required because neither is sufficient alone.
+
+- **Evidence-first answers**: every generated answer must cite the specific SourceDocument IDs and graph paths it drew from. Refuse to answer without retrieved support — a hallucinated KPI definition is worse than no answer. This submission already demonstrates the principle one layer down: every finding ties back to specific Document IDs from the anomaly catalog, so a reviewer can trace any flag to its source. The same discipline applied one layer up means context-engineered answers cite their source SOP section, change-request ID, or email thread — not just "the policy says so."
+
+- **Risk 1 — Stale context vs. source-of-truth drift**: a SOP is updated in Confluence but the embedded chunk is 3 months old; the system confidently answers from outdated text. Mitigation: freshness SLOs per source type (e.g. SOPs re-indexed within 24h of a Confluence edit event via webhook; CoA YAML re-indexed on each repo merge to main).
+
+- **Risk 2 — Hallucinated KPI definitions**: the LLM interpolates a plausible-sounding definition that no source document actually contains, because the retrieval step returned only partial context. Mitigation: require evidence-anchored answers — if the retriever returns fewer than N chunks above a confidence threshold, return "I don't have enough source material to answer this confidently" rather than generating from priors. This is the same discipline as ADR-0002: prefer an explicit "no finding" over a false positive.
 
 ---
 
